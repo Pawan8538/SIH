@@ -88,7 +88,8 @@ const getSensorById = (sensor_id) =>
 ============================================================ */
 const insertSensorReading = (sensor_id, value, status = 'ok') =>
   query(
-    `INSERT INTO sensor_readings (time, sensor_id, value, status)
+    `INSERT INTO sensor_readings (sensor_id, value, status)
+     VALUES ($1, $2, $3) RETURNING *;
      VALUES (NOW(), $1, $2, $3) RETURNING *`,
     [sensor_id, value, status]
   );

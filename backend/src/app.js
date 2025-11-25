@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-
+const { query } = require("./models/db");
 const { requestLogger } = require('./utils/logger');
 const { notFoundHandler, errorHandler } = require('./middleware/validate');
 
@@ -34,6 +34,16 @@ app.use(requestLogger);
 // Healthcheck
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'backend-api', timestamp: new Date().toISOString() });
+});
+
+//TEST
+app.get("/supabase", async (req, res) => {
+  try {
+    const result = await query("SELECT NOW()");
+    res.json({ connected: true, time: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ connected: false, error: err.message });
+  }
 });
 
 // API routes (wire up when implemented)

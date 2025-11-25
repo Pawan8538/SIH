@@ -2,7 +2,6 @@
 -- 1. EXTENSIONS
 -- ==========================================================
 CREATE EXTENSION IF NOT EXISTS postgis;
--- CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- ==========================================================
 -- 2. ROLES TABLE
@@ -23,7 +22,7 @@ INSERT INTO roles (name) VALUES
 -- ==========================================================
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    role_id INT REFERENCES roles(id),
+    role_id INT REFERENCES roles(id) ON DELETE SET NULL ON UPDATE CASCADE,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     phone VARCHAR(20),
@@ -37,14 +36,14 @@ CREATE TABLE users (
 -- ==========================================================
 CREATE TABLE govt_authorities (
     id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES users(id),
-    department VARCHAR(255) NOT NULL,       -- police, NDRF, railways etc
+    user_id INT REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    department VARCHAR(255) NOT NULL,
     region VARCHAR(255),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- ==========================================================
--- 5. SITES / SLOPES
+-- 5. SLOPES TABLE
 -- ==========================================================
 CREATE TABLE slopes (
     id SERIAL PRIMARY KEY,
@@ -60,9 +59,9 @@ CREATE TABLE slopes (
 -- ==========================================================
 CREATE TABLE sensors (
     id SERIAL PRIMARY KEY,
-    slope_id INT REFERENCES slopes(id),
+    slope_id INT REFERENCES slopes(id) ON DELETE CASCADE ON UPDATE CASCADE,
     name VARCHAR(255),
-    sensor_type VARCHAR(100),        -- tilt, vibration, rainfall, manual_input
+    sensor_type VARCHAR(100),
     unit VARCHAR(50),
     is_active BOOLEAN DEFAULT TRUE,
     last_seen TIMESTAMP,
@@ -70,28 +69,34 @@ CREATE TABLE sensors (
 );
 
 -- ==========================================================
--- 7. SENSOR READINGS (TIMESCALED)
+-- 7. SENSOR READINGS (ALTERNATIVE TO TIMESCALE)
 -- ==========================================================
 CREATE TABLE sensor_readings (
-    time TIMESTAMPTZ NOT NULL,
-    sensor_id INT REFERENCES sensors(id),
+    id BIGSERIAL PRIMARY KEY,
+    time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    sensor_id INT REFERENCES sensors(id) ON DELETE CASCADE ON UPDATE CASCADE,
     value NUMERIC,
-    status VARCHAR(50) DEFAULT 'ok',
-    PRIMARY KEY (time, sensor_id)
+    status VARCHAR(50) DEFAULT 'ok'
 );
 
--- SELECT create_hypertable('sensor_readings', 'time', if_not_exists => TRUE);
+-- Optimized BRIN index
+CREATE INDEX sensor_readings_brin_idx
+ON sensor_readings
+USING brin (time) WITH (pages_per_range = 128);
+
+-- Optional partitioning
+-- ALTER TABLE sensor_readings PARTITION BY RANGE (time);
 
 -- ==========================================================
--- 8. COMPLAINTS (Field Worker)
+-- 8. COMPLAINTS TABLE
 -- ==========================================================
 CREATE TABLE complaints (
     id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES users(id),
-    slope_id INT REFERENCES slopes(id),
+    user_id INT REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    slope_id INT REFERENCES slopes(id) ON DELETE SET NULL ON UPDATE CASCADE,
     description TEXT,
     media_url TEXT,
-    status VARCHAR(50) DEFAULT 'pending',       -- pending, in_progress, resolved
+    status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -100,43 +105,43 @@ CREATE TABLE complaints (
 -- ==========================================================
 CREATE TABLE alerts (
     id SERIAL PRIMARY KEY,
-    slope_id INT REFERENCES slopes(id),
-    alert_type VARCHAR(255),                   -- risk_high, sensor_failure, crack_detected
+    slope_id INT REFERENCES slopes(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    alert_type VARCHAR(255),
     message TEXT,
-    severity VARCHAR(50),                       -- low/medium/high/critical
+    severity VARCHAR(50),
     created_at TIMESTAMP DEFAULT NOW(),
     acknowledged BOOLEAN DEFAULT FALSE,
-    acknowledged_by INT REFERENCES users(id)
+    acknowledged_by INT REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- ==========================================================
--- 10. OFFLINE MESSAGES (Redis queue fallback storage)
+-- 10. OFFLINE MESSAGES TABLE
 -- ==========================================================
 CREATE TABLE offline_messages (
     id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES users(id),
+    user_id INT REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
     payload JSONB NOT NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     delivered BOOLEAN DEFAULT FALSE
 );
 
 -- ==========================================================
--- 11. CAMERA SNAPSHOTS (ML detections)
+-- 11. CAMERA SNAPSHOTS TABLE
 -- ==========================================================
 CREATE TABLE camera_snapshots (
     id SERIAL PRIMARY KEY,
-    slope_id INT REFERENCES slopes(id),
+    slope_id INT REFERENCES slopes(id) ON DELETE CASCADE ON UPDATE CASCADE,
     image_url TEXT,
     detection JSONB,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- ==========================================================
--- 12. ML PREDICTION LOGS
+-- 12. ML PREDICTIONS TABLE
 -- ==========================================================
 CREATE TABLE ml_predictions (
     id SERIAL PRIMARY KEY,
-    slope_id INT REFERENCES slopes(id),
+    slope_id INT REFERENCES slopes(id) ON DELETE CASCADE ON UPDATE CASCADE,
     risk_score NUMERIC,
     prediction JSONB,
     explainability JSONB,
@@ -144,16 +149,16 @@ CREATE TABLE ml_predictions (
 );
 
 -- ==========================================================
--- 13. TASK MANAGEMENT (Admin → Field Workers)
+-- 13. TASKS TABLE
 -- ==========================================================
 CREATE TABLE tasks (
     id SERIAL PRIMARY KEY,
-    assigned_by INT REFERENCES users(id),
-    assigned_to INT REFERENCES users(id),
-    slope_id INT REFERENCES slopes(id),
+    assigned_by INT REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    assigned_to INT REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    slope_id INT REFERENCES slopes(id) ON DELETE SET NULL ON UPDATE CASCADE,
     title VARCHAR(255),
     description TEXT,
-    status VARCHAR(50) DEFAULT 'pending', -- pending, accepted, completed
+    status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

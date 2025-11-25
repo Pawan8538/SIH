@@ -1,10 +1,10 @@
 const { Pool } = require('pg');
 const config = require('../config/env');
 
-// NOTE: TimescaleDB hooks will be added later; for now we connect to plain PostgreSQL with PostGIS enabled.
 const pool = new Pool({
   connectionString: config.databaseUrl,
-  ssl: config.dbSSL ? { rejectUnauthorized: false } : false
+  // ssl: config.dbSSL ? { rejectUnauthorized: false } : false
+  ssl: { rejectUnauthorized: false }  // Supabase requires this
 });
 
 pool.on('error', (err) => {
